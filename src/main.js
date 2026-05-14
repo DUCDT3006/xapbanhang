@@ -4,7 +4,7 @@ import './pos.css';
 import './modal.css';
 import { createIcons, Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image as ImageIcon } from 'lucide';
 import { renderPOS } from './modules/pos.js';
-import { getStore, saveStore, formatCurrency } from './core/store.js';
+import { initStore, getStore, saveStore, formatCurrency } from './core/store.js';
 
 // Global Cart State
 window.cart = [];
@@ -838,7 +838,8 @@ themeToggle.addEventListener('click', () => {
 });
 
 // App Initialization
-const initApp = () => {
+const initApp = async () => {
+  await initStore();
   renderIcons();
   navigateTo('dashboard', 'Tổng quan');
 };
