@@ -5,7 +5,12 @@ import { db } from "./firebase.js";
 let cachedStore = {
   products: [],
   customers: [],
-  orders: []
+  orders: [],
+  settings: {
+    bankName: '',
+    bankAccount: '',
+    bankAccountName: ''
+  }
 };
 
 // Initialize store from Firebase
@@ -16,6 +21,16 @@ export const initStore = async () => {
 
     if (docSnap.exists()) {
       cachedStore = docSnap.data();
+      
+      // Ensure settings exist for existing data
+      if (!cachedStore.settings) {
+        cachedStore.settings = {
+          bankName: 'MB Bank',
+          bankAccount: '123456789',
+          bankAccountName: 'DUONG DUC'
+        };
+      }
+      
       console.log("Dữ liệu đã được tải từ Firebase:", cachedStore);
     } else {
       console.log("Chưa có dữ liệu trên Firebase, khởi tạo mặc định.");
@@ -30,7 +45,12 @@ export const initStore = async () => {
           { id: 'KH001', name: 'Nguyễn Văn A', phone: '0987654321', totalSpent: 1500000, debt: 500000 },
           { id: 'KH002', name: 'Trần Thị B', phone: '0912345678', totalSpent: 2000000, debt: 0 }
         ],
-        orders: []
+        orders: [],
+        settings: {
+          bankName: 'MB Bank',
+          bankAccount: '123456789',
+          bankAccountName: 'DUONG DUC'
+        }
       };
       await saveStore(cachedStore);
     }

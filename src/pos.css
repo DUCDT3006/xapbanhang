@@ -197,6 +197,10 @@
     box-shadow: var(--shadow-lg);
     font-weight: 700;
   }
+
+  .mobile-cart-close {
+    display: flex !important;
+  }
 }
 
 @media (min-width: 993px) {

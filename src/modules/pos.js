@@ -27,7 +27,8 @@ export const renderPOS = () => {
 
       <!-- Right side: Cart & Checkout -->
       <div class="pos-cart glass-panel">
-        <div class="cart-header" style="flex-direction: column; align-items: stretch; gap: 1rem;">
+        <button class="btn-icon mobile-cart-close" onclick="window.toggleCart(false)" style="position: absolute; top: 1rem; right: 1rem; z-index: 10; display: none; background: var(--bg-panel-solid); box-shadow: var(--shadow-sm);"><i data-lucide="x"></i></button>
+        <div class="cart-header" style="flex-direction: column; align-items: stretch; gap: 1rem; padding-top: 2rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3>Đơn hàng <span class="badge" id="cart-count">0</span></h3>
             <button class="btn-icon text-danger" title="Xóa toàn bộ" onclick="window.clearCart()"><i data-lucide="trash-2"></i></button>
@@ -83,7 +84,7 @@ export const renderPOS = () => {
         </div>
 
         <div class="cart-actions" style="border-top: 1px solid var(--border-color); background: var(--bg-panel-solid); padding: 1rem 1.5rem;">
-          <button class="btn btn-secondary flex-1" style="font-size: 1.1rem; padding: 1rem;" onclick="window.toggleCart(false)"><i data-lucide="x"></i> ĐÓNG</button>
+          <button class="btn btn-secondary flex-1" style="font-size: 1.1rem; padding: 1rem;" onclick="window.openVietQRModal()"><i data-lucide="qr-code"></i> VietQR</button>
           <button class="btn btn-primary flex-2" style="font-size: 1.1rem; padding: 1rem;" onclick="window.checkout()"><i data-lucide="credit-card"></i> THANH TOÁN</button>
         </div>
       </div>

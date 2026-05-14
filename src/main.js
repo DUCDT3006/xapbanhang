@@ -2,7 +2,9 @@ import './style.css';
 import './tabs_tables.css';
 import './pos.css';
 import './modal.css';
-import { createIcons, Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image as ImageIcon, Menu } from 'lucide';
+import { createIcons, Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image as ImageIcon, Menu, Printer } from 'lucide';
+import Chart from 'chart.js/auto';
+import JsBarcode from 'jsbarcode';
 import { renderPOS } from './modules/pos.js';
 import { initStore, getStore, saveStore, formatCurrency } from './core/store.js';
 
@@ -63,6 +65,53 @@ window.closeCustomerModal = () => {
       document.getElementById('new-cust-' + id).value = '';
     });
   }
+};
+
+window.openVietQRModal = () => {
+  const store = getStore();
+  const subtotal = window.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const discount = parseInt(document.getElementById('cart-discount')?.value) || 0;
+  const total = Math.max(0, subtotal - discount);
+
+  if (total <= 0) {
+    alert("Vui lòng thêm sản phẩm vào đơn hàng để thanh toán!");
+    return;
+  }
+
+  const { bankName, bankAccount, bankAccountName } = store.settings;
+  if (!bankName || !bankAccount) {
+    alert("Chưa cấu hình tài khoản ngân hàng. Vui lòng cập nhật cấu hình!");
+    return;
+  }
+
+  // Find Bin code for MB Bank (970422) - Simplification for now, usually needs a lookup table
+  // VietQR format: https://img.vietqr.io/image/<BANK_ID>-<ACCOUNT_NO>-<TEMPLATE>.png?amount=<AMOUNT>&addInfo=<DESCRIPTION>&accountName=<ACCOUNT_NAME>
+  // MB Bank Bin is 'mbbank' or 'MB' or '970422'
+  const bankId = bankName.toLowerCase().replace(/\s+/g, ''); // Simple fallback
+  const finalBankId = bankId.includes('mb') ? 'mbbank' : bankId; // Map "MB Bank" to "mbbank"
+
+  const qrUrl = \`https://img.vietqr.io/image/\${finalBankId}-\${bankAccount}-compact2.png?amount=\${total}&addInfo=Thanh toan don hang&accountName=\${encodeURIComponent(bankAccountName)}\`;
+
+  const imgEl = document.getElementById('vietqr-img');
+  const infoEl = document.getElementById('vietqr-info');
+  
+  if (imgEl && infoEl) {
+    imgEl.src = qrUrl;
+    infoEl.innerHTML = \`
+      <div style="font-weight: bold; font-size: 1.4rem; color: var(--danger); margin-bottom: 0.5rem;">\${formatCurrency(total)}</div>
+      <div><strong>Ngân hàng:</strong> \${bankName}</div>
+      <div><strong>Số tài khoản:</strong> <span class="text-primary font-bold">\${bankAccount}</span></div>
+      <div><strong>Chủ TK:</strong> \${bankAccountName}</div>
+    \`;
+  }
+
+  const modal = document.getElementById('vietqr-modal');
+  if (modal) modal.style.display = 'flex';
+};
+
+window.closeVietQRModal = () => {
+  const modal = document.getElementById('vietqr-modal');
+  if (modal) modal.style.display = 'none';
 };
 
 window.saveNewCustomer = () => {
@@ -506,56 +555,269 @@ window.updateCartUI = () => {
   renderIcons();
 };
 
+let dashboardChartInstance = null;
+window.renderDashboardChart = () => {
+  const canvas = document.getElementById('revenueChart');
+  if (!canvas) return;
 
-// View Components (Placeholders for now)
+  const store = getStore();
+  const ctx = canvas.getContext('2d');
+  
+  // Destroy previous instance if exists
+  if (dashboardChartInstance) {
+    dashboardChartInstance.destroy();
+  }
+
+  // Generate last 7 days labels
+  const labels = [];
+  const data = [];
+  
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' }));
+    
+    // Calculate revenue for this day
+    const dayStart = new Date(d);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(d);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    const dayRevenue = store.orders.reduce((sum, order) => {
+      const orderDate = new Date(order.date);
+      if (orderDate >= dayStart && orderDate <= dayEnd) {
+        return sum + order.total;
+      }
+      return sum;
+    }, 0);
+    
+    data.push(dayRevenue);
+  }
+
+  const isDark = document.body.classList.contains('dark-theme');
+  const textColor = isDark ? '#f8fafc' : '#0f172a';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+  dashboardChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Doanh thu (VNĐ)',
+        data: data,
+        backgroundColor: 'rgba(14, 165, 233, 0.7)',
+        borderColor: 'rgba(14, 165, 233, 1)',
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: gridColor },
+          ticks: { color: textColor }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: textColor }
+        }
+      }
+    }
+  });
+};
+
+window.printBarcodes = () => {
+  const store = getStore();
+  if (store.products.length === 0) {
+    alert("Kho hàng đang trống!");
+    return;
+  }
+
+  // Create a hidden iframe for printing
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <html>
+      <head>
+        <title>In Mã Vạch</title>
+        <style>
+          body { font-family: sans-serif; margin: 0; padding: 10mm; }
+          .barcode-container {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 4cm;
+            height: 2.5cm;
+            margin: 5mm;
+            border: 1px dashed #ccc;
+            text-align: center;
+            overflow: hidden;
+          }
+          .barcode-name {
+            font-size: 0.7rem;
+            margin-bottom: 0.1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+          }
+          .barcode-price {
+            font-size: 0.8rem;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <div style="display: flex; flex-wrap: wrap;">
+  `);
+
+  // We will generate the images then write them
+  store.products.forEach(p => {
+    // We create a temporary canvas to use JsBarcode
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, p.id, {
+        format: "CODE128",
+        width: 1.5,
+        height: 40,
+        displayValue: true,
+        fontSize: 12,
+        margin: 5
+      });
+      const dataUrl = canvas.toDataURL("image/png");
+      
+      // We print 3 copies of each product's barcode for demo purposes
+      for(let i=0; i<3; i++) {
+        doc.write(`
+          <div class="barcode-container">
+            <div class="barcode-name">${p.name}</div>
+            <img src="${dataUrl}" style="max-width: 100%; height: auto;">
+            <div class="barcode-price">${formatCurrency(p.price)}</div>
+          </div>
+        `);
+      }
+    } catch(e) {
+      console.error("Lỗi tạo mã vạch cho", p.id, e);
+    }
+  });
+
+  doc.write(`
+        </div>
+      </body>
+    </html>
+  `);
+  doc.close();
+
+  // Wait for images to load before printing
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 1000);
+  }, 500);
+};
+
+// View Components
 const views = {
-  dashboard: () => `
-    <div class="fade-in">
-      <div class="dashboard-grid">
-        <div class="stat-card glass-panel">
-          <div class="stat-card-title">
-            <span>Doanh thu hôm nay</span>
-            <i data-lucide="dollar-sign" class="text-primary"></i>
+  dashboard: () => {
+    const store = getStore();
+    
+    // Calculate Stats
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    let todayRevenue = 0;
+    let yesterdayRevenue = 0;
+    let todayOrders = 0;
+    let yesterdayOrders = 0;
+
+    store.orders.forEach(order => {
+      const orderDate = new Date(order.date);
+      if (orderDate >= today) {
+        todayRevenue += order.total;
+        todayOrders++;
+      } else if (orderDate >= yesterday && orderDate < today) {
+        yesterdayRevenue += order.total;
+        yesterdayOrders++;
+      }
+    });
+
+    const revenueTrend = yesterdayRevenue === 0 ? 100 : Math.round(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100);
+    const ordersTrend = yesterdayOrders === 0 ? 100 : Math.round(((todayOrders - yesterdayOrders) / yesterdayOrders) * 100);
+
+    const newCustomers = store.customers.filter(c => {
+      // Simplification: we don't have created_at for customers, just use total count for now or mock it
+      return c.totalSpent === 0; 
+    }).length;
+
+    const lowStockCount = store.products.filter(p => p.stock < 10).length;
+
+    // Delay chart render
+    setTimeout(window.renderDashboardChart, 50);
+
+    return \`
+      <div class="fade-in">
+        <div class="dashboard-grid">
+          <div class="stat-card glass-panel">
+            <div class="stat-card-title">
+              <span>Doanh thu hôm nay</span>
+              <i data-lucide="dollar-sign" class="text-primary"></i>
+            </div>
+            <div class="stat-card-value">\${formatCurrency(todayRevenue)}</div>
+            <div class="stat-card-trend \${revenueTrend >= 0 ? 'up' : 'down'}">
+              <i data-lucide="trending-\${revenueTrend >= 0 ? 'up' : 'down'}"></i> \${revenueTrend >= 0 ? '+' : ''}\${revenueTrend}% so với hôm qua
+            </div>
           </div>
-          <div class="stat-card-value">12,500,000₫</div>
-          <div class="stat-card-trend up">
-            <i data-lucide="trending-up"></i> +15% so với hôm qua
+          <div class="stat-card glass-panel">
+            <div class="stat-card-title">
+              <span>Đơn hàng hôm nay</span>
+              <i data-lucide="shopping-cart" class="text-success"></i>
+            </div>
+            <div class="stat-card-value">\${todayOrders}</div>
+            <div class="stat-card-trend \${ordersTrend >= 0 ? 'up' : 'down'}">
+              <i data-lucide="trending-\${ordersTrend >= 0 ? 'up' : 'down'}"></i> \${ordersTrend >= 0 ? '+' : ''}\${ordersTrend}% so với hôm qua
+            </div>
+          </div>
+          <div class="stat-card glass-panel">
+            <div class="stat-card-title">
+              <span>Khách chưa mua hàng</span>
+              <i data-lucide="users" class="text-info"></i>
+            </div>
+            <div class="stat-card-value">\${newCustomers}</div>
+            <div class="stat-card-trend">Tiềm năng</div>
+          </div>
+          <div class="stat-card glass-panel">
+            <div class="stat-card-title">
+              <span>Cảnh báo tồn kho</span>
+              <i data-lucide="package-open" class="text-danger"></i>
+            </div>
+            <div class="stat-card-value text-danger">\${lowStockCount}</div>
+            <div class="stat-card-trend">Sản phẩm sắp hết (< 10)</div>
           </div>
         </div>
-        <div class="stat-card glass-panel">
-          <div class="stat-card-title">
-            <span>Đơn hàng</span>
-            <i data-lucide="shopping-cart" class="text-success"></i>
+        <div class="glass-panel" style="border-radius: 1rem; padding: 1.5rem; margin-top: 2rem;">
+          <h3 style="margin-bottom: 1rem;">Doanh thu 7 ngày gần nhất</h3>
+          <div style="position: relative; height: 350px; width: 100%;">
+            <canvas id="revenueChart"></canvas>
           </div>
-          <div class="stat-card-value">45</div>
-          <div class="stat-card-trend up">
-            <i data-lucide="trending-up"></i> +5% so với hôm qua
-          </div>
-        </div>
-        <div class="stat-card glass-panel">
-          <div class="stat-card-title">
-            <span>Khách hàng mới</span>
-            <i data-lucide="users" class="text-info"></i>
-          </div>
-          <div class="stat-card-value">12</div>
-          <div class="stat-card-trend down">
-            <i data-lucide="trending-down"></i> -2% so với hôm qua
-          </div>
-        </div>
-        <div class="stat-card glass-panel">
-          <div class="stat-card-title">
-            <span>Cảnh báo tồn kho</span>
-            <i data-lucide="package-open" class="text-danger"></i>
-          </div>
-          <div class="stat-card-value text-danger">8</div>
-          <div class="stat-card-trend">Sản phẩm sắp hết</div>
         </div>
       </div>
-      <div class="glass-panel" style="height: 400px; border-radius: 1rem; padding: 1.5rem; display: flex; align-items: center; justify-content: center;">
-        <p class="text-muted">Biểu đồ doanh thu (Chart.js sẽ được tích hợp tại đây)</p>
-      </div>
-    </div>
-  `,
+    \`;
+  },
   pos: () => {
     setTimeout(updateCartUI, 50); // Delay UI update to ensure DOM is ready
     return renderPOS();
@@ -656,7 +918,8 @@ const views = {
           <button class="tab-btn">Xuất kho / Huỷ hàng</button>
           <button class="tab-btn">Kiểm kho</button>
         </div>
-        <div class="topbar-actions" style="margin-bottom: 1rem; justify-content: flex-end;">
+        <div class="topbar-actions" style="margin-bottom: 1rem; justify-content: flex-end; gap: 0.5rem; display: flex;">
+           <button class="btn btn-secondary" onclick="window.printBarcodes()"><i data-lucide="printer"></i> In Mã Vạch</button>
            <button class="btn btn-primary" onclick="window.openProductModal()"><i data-lucide="plus"></i> Thêm hàng hóa</button>
         </div>
         <div class="data-table-wrapper" style="overflow-x: auto;">
@@ -727,6 +990,13 @@ const views = {
   
   reports: () => {
     const store = getStore();
+    
+    let totalRevenue = 0;
+    let totalCost = 0;
+    
+    // Top Products Calculation
+    const productSales = {};
+
     const orderRows = store.orders.sort((a, b) => new Date(b.date) - new Date(a.date)).map(order => {
       const customer = order.customerId === 'GUEST' ? 'Khách lẻ' : (store.customers.find(c => c.id === order.customerId)?.name || 'Khách lẻ');
       const dateStr = new Date(order.date).toLocaleString('vi-VN');
@@ -740,50 +1010,106 @@ const views = {
       if (order.shippingStatus === 'Đã ship') shipBadge = '<span class="badge success">Đã ship</span>';
       else if (order.shippingStatus === 'Đổi trả') shipBadge = '<span class="badge danger">Đổi trả</span>';
 
-      return `
-        <tr style="cursor: pointer;" onclick="window.openOrderDetail('${order.id}')">
-          <td>${order.id}</td>
-          <td>${dateStr}</td>
-          <td>${customer}</td>
-          <td class="font-bold text-primary">${formatCurrency(order.total)}</td>
-          <td>${formatCurrency(order.paid || 0)}</td>
-          <td class="${(order.debt || 0) > 0 ? 'text-danger font-bold' : ''}">${formatCurrency(order.debt || 0)}</td>
-          <td>${paymentBadge}</td>
-          <td>${shipBadge}</td>
-        </tr>
-      `;
-    }).join('');
+      // Profit calc for this order
+      let orderCost = 0;
+      order.items.forEach(item => {
+        const itemCost = item.cost || 0;
+        orderCost += itemCost * item.qty;
+        
+        // Track product sales
+        if (!productSales[item.id]) {
+          productSales[item.id] = { name: item.name, qty: 0, revenue: 0 };
+        }
+        productSales[item.id].qty += item.qty;
+        productSales[item.id].revenue += (item.price * item.qty);
+      });
+      
+      // If order is not returned, add to total stats
+      if (order.shippingStatus !== 'Đổi trả') {
+         totalRevenue += order.total;
+         totalCost += orderCost;
+      }
 
-    return `
+      const profit = order.total - orderCost;
+
+      return \`
+        <tr style="cursor: pointer;" onclick="window.openOrderDetail('\${order.id}')">
+          <td>\${order.id}</td>
+          <td>\${dateStr}</td>
+          <td>\${customer}</td>
+          <td class="font-bold text-primary">\${formatCurrency(order.total)}</td>
+          <td>\${formatCurrency(orderCost)}</td>
+          <td class="\${profit > 0 ? 'text-success' : 'text-danger'} font-bold">\${formatCurrency(profit)}</td>
+          <td>\${paymentBadge}</td>
+        </tr>
+      \`;
+    }).join('');
+    
+    const totalProfit = totalRevenue - totalCost;
+    
+    // Sort and get Top 5 Products
+    const topProducts = Object.values(productSales)
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5)
+      .map((p, idx) => \`
+        <div class="glass-panel" style="padding: 1rem; border-radius: 0.5rem; display: flex; align-items: center; margin-bottom: 0.5rem;">
+          <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary); width: 40px;">#\${idx + 1}</div>
+          <div style="flex: 1;">
+            <div style="font-weight: bold;">\${p.name}</div>
+            <div class="text-muted text-sm">Đã bán: \${p.qty} | Doanh thu: \${formatCurrency(p.revenue)}</div>
+          </div>
+        </div>
+      \`).join('');
+
+    return \`
       <div class="fade-in glass-panel" style="border-radius: 1rem; padding: 1.5rem; min-height: 100%;">
-        <div class="tabs-nav">
-          <button class="tab-btn active">Lịch sử đơn hàng</button>
-          <button class="tab-btn">Báo cáo doanh thu</button>
-          <button class="tab-btn">Hàng bán chạy</button>
+        <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
+          <div class="stat-card glass-panel" style="background: rgba(14, 165, 233, 0.1);">
+            <div class="stat-card-title">Tổng Doanh Thu</div>
+            <div class="stat-card-value text-primary">\${formatCurrency(totalRevenue)}</div>
+          </div>
+          <div class="stat-card glass-panel" style="background: rgba(245, 158, 11, 0.1);">
+            <div class="stat-card-title">Tổng Tiền Vốn</div>
+            <div class="stat-card-value text-warning">\${formatCurrency(totalCost)}</div>
+          </div>
+          <div class="stat-card glass-panel" style="background: rgba(16, 185, 129, 0.1);">
+            <div class="stat-card-title">Lợi Nhuận Gộp</div>
+            <div class="stat-card-value text-success">\${formatCurrency(totalProfit)}</div>
+          </div>
         </div>
         
-        <h3 style="margin-bottom: 1rem;">Đơn hàng gần đây</h3>
-        <div class="data-table-wrapper" style="overflow-x: auto;">
-          <table class="data-table" style="min-width: 900px;">
-            <thead>
-              <tr>
-                <th>Mã đơn</th>
-                <th>Thời gian</th>
-                <th>Khách hàng</th>
-                <th>Tổng tiền</th>
-                <th>Đã thanh toán</th>
-                <th>Còn nợ</th>
-                <th>TT Thanh toán</th>
-                <th>TT Giao hàng</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${orderRows || '<tr><td colspan="8" class="text-center text-muted" style="padding: 2rem;">Chưa có đơn hàng nào</td></tr>'}
-            </tbody>
-          </table>
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+          <div style="flex: 2; min-width: 400px;">
+            <h3 style="margin-bottom: 1rem;">Lịch sử đơn hàng</h3>
+            <div class="data-table-wrapper" style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Mã đơn</th>
+                    <th>Thời gian</th>
+                    <th>Khách hàng</th>
+                    <th>Doanh thu</th>
+                    <th>Tiền vốn</th>
+                    <th>Lợi nhuận</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  \${orderRows || '<tr><td colspan="7" class="text-center text-muted" style="padding: 2rem;">Chưa có đơn hàng nào</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div style="flex: 1; min-width: 300px;">
+            <h3 style="margin-bottom: 1rem;">Top 5 Bán Chạy Nhất</h3>
+            <div>
+              \${topProducts || '<p class="text-muted">Chưa có dữ liệu bán hàng</p>'}
+            </div>
+          </div>
         </div>
       </div>
-    `;
+    \`;
   }
 
 
@@ -803,7 +1129,7 @@ const themeToggle = document.getElementById('theme-toggle');
 const renderIcons = () => {
   createIcons({
     icons: {
-      Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image: ImageIcon, Menu
+      Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image: ImageIcon, Menu, Printer
     }
   });
 };
