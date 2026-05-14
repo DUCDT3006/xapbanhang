@@ -87,3 +87,41 @@
 .form-control:focus {
   border-color: var(--primary);
 }
+
+.od-modal-body {
+  display: flex;
+  gap: 2rem;
+}
+
+/* Responsive Modal Adjustments */
+@media (max-width: 768px) {
+  .od-modal-body {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+  
+  .od-modal-body > div {
+    border-right: none !important;
+    padding-right: 0 !important;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+  }
+
+  .modal-content {
+    padding: 0;
+    margin: 1rem;
+    width: 95%;
+  }
+  
+  .modal-header h3 {
+    font-size: 1rem;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-group:nth-child(n) {
+    grid-column: auto;
+  }
+}

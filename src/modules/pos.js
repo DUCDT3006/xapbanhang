@@ -83,10 +83,16 @@ export const renderPOS = () => {
         </div>
 
         <div class="cart-actions" style="border-top: 1px solid var(--border-color); background: var(--bg-panel-solid); padding: 1rem 1.5rem;">
-          <button class="btn btn-secondary flex-1" style="font-size: 1.1rem; padding: 1rem;"><i data-lucide="qr-code"></i> VietQR</button>
+          <button class="btn btn-secondary flex-1" style="font-size: 1.1rem; padding: 1rem;" onclick="window.toggleCart(false)"><i data-lucide="x"></i> ĐÓNG</button>
           <button class="btn btn-primary flex-2" style="font-size: 1.1rem; padding: 1rem;" onclick="window.checkout()"><i data-lucide="credit-card"></i> THANH TOÁN</button>
         </div>
       </div>
+
+      <!-- Mobile Floating Cart Toggle -->
+      <button class="btn btn-primary mobile-cart-toggle" onclick="window.toggleCart(true)" style="display: none;">
+        <i data-lucide="shopping-cart"></i>
+        <span>Giỏ hàng (<span id="mobile-cart-count">0</span>)</span>
+      </button>
     </div>
 
     <!-- Add Customer Modal -->
@@ -139,4 +145,12 @@ export const renderPOS = () => {
       </div>
     </div>
   `;
+};
+
+window.toggleCart = (show) => {
+  const container = document.querySelector('.pos-container');
+  if (container) {
+    if (show) container.classList.add('show-cart');
+    else container.classList.remove('show-cart');
+  }
 };

@@ -59,7 +59,12 @@
       <!-- Main Content Area -->
       <main class="main-content">
         <header class="topbar glass-panel">
-          <h1 id="page-title">Tổng quan</h1>
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <button class="btn-icon btn-mobile-menu" onclick="window.toggleSidebar()" style="display: none;">
+              <i data-lucide="menu"></i>
+            </button>
+            <h1 id="page-title">Tổng quan</h1>
+          </div>
           <div class="topbar-actions">
             <div class="search-bar">
               <i data-lucide="search"></i>
@@ -88,7 +93,7 @@
           <h3>Chi tiết Đơn hàng & Khách hàng</h3>
           <button class="btn-icon" onclick="window.closeOrderDetail()"><i data-lucide="x"></i></button>
         </div>
-        <div class="modal-body" style="display: flex; gap: 2rem;">
+        <div class="modal-body od-modal-body">
           <!-- Customer Info -->
           <div style="flex: 1; border-right: 1px solid var(--border-color); padding-right: 1.5rem;">
             <h4 style="margin-bottom: 1rem; color: var(--primary);">Thông tin Khách hàng</h4>

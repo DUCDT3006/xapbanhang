@@ -2,12 +2,19 @@ import './style.css';
 import './tabs_tables.css';
 import './pos.css';
 import './modal.css';
-import { createIcons, Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image as ImageIcon } from 'lucide';
+import { createIcons, Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image as ImageIcon, Menu } from 'lucide';
 import { renderPOS } from './modules/pos.js';
 import { initStore, getStore, saveStore, formatCurrency } from './core/store.js';
 
 // Global Cart State
 window.cart = [];
+
+window.toggleSidebar = () => {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.classList.toggle('active');
+  }
+};
 
 window.addToCart = (productId) => {
   const store = getStore();
@@ -459,6 +466,9 @@ window.updateCartUI = () => {
 
   let subtotal = 0;
   countBadge.textContent = window.cart.length;
+  
+  const mobileCartCountEl = document.getElementById('mobile-cart-count');
+  if (mobileCartCountEl) mobileCartCountEl.textContent = window.cart.length;
 
   if (window.cart.length === 0) {
     container.innerHTML = '<div class="empty-cart-msg text-muted">Chưa có sản phẩm nào</div>';
@@ -793,7 +803,7 @@ const themeToggle = document.getElementById('theme-toggle');
 const renderIcons = () => {
   createIcons({
     icons: {
-      Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image: ImageIcon
+      Moon, Sun, LayoutDashboard, ShoppingCart, Package, Users, BarChart2, Search, Plus, Bell, TrendingUp, TrendingDown, DollarSign, PackageOpen, Trash2, QrCode, CreditCard, User, UserPlus, X, ClipboardList, Image: ImageIcon, Menu
     }
   });
 };
@@ -813,6 +823,11 @@ const navigateTo = (viewName, title) => {
         nav.classList.remove('active');
       }
     });
+
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth <= 768) {
+      document.querySelector('.sidebar').classList.remove('active');
+    }
 
     // Render View
     viewContainer.innerHTML = views[viewName]();
